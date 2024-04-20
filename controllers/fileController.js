@@ -1,3 +1,4 @@
+const path = require('path');
 const fileService = require("../services/fileService");
 const config = require("config");
 const fs = require("fs");
@@ -11,15 +12,17 @@ class FileController {
             const { name, type, parent } = req.body;
             const file = new File({ name, type, parent, user: req.user.id });
             const parentFile = await File.findOne({ _id: parent });
+            
             if (!parentFile) {
-                file.path = name;
+                file.path = path.join(req.filePath, name); // используем path.join для формирования полного пути
                 await fileService.createDir(req, file);
             } else {
-                file.path = `${parentFile.path}\\${file.name}`;
+                file.path = path.join(parentFile.path, name); // используем path.join для формирования полного пути
                 await fileService.createDir(req, file);
                 parentFile.childs.push(file._id);
                 await parentFile.save();
             }
+            
             await file.save();
             return res.json(file);
         } catch (e) {
@@ -70,35 +73,35 @@ class FileController {
             const user = await User.findOne({ _id: req.user.id });
 
             if (user.usedSpace + file.size > user.diskSpace) {
-                return res
-                    .status(400)
-                    .json({ message: "На диске нет свободного места" });
+                return res.status(400).json({ message: "На диске нет свободного места" });
             }
 
             user.usedSpace = user.usedSpace + file.size;
 
-            let path;
+            let filePath;
             if (parent) {
-                path = `${req.filePath}\\${user._id}\\${parent.path}\\${file.name}`;
+                filePath = path.join(req.filePath, user._id.toString(), parent.path, file.name); // используем path.join для формирования полного пути
             } else {
-                path = `${req.filePath}\\${user._id}\\${file.name}`;
+                filePath = path.join(req.filePath, user._id.toString(), file.name); // используем path.join для формирования полного пути
             }
 
-            if (fs.existsSync(path)) {
+            if (fs.existsSync(filePath)) {
                 return res.status(400).json({ message: "Файл уже существует" });
             }
-            file.mv(path);
+
+            file.mv(filePath);
 
             const type = file.name.split(".").pop();
-            let filePath = file.name;
+            let dbFilePath = file.name;
             if (parent) {
-                filePath = parent.path + "\\" + file.name;
+                dbFilePath = path.join(parent.path, file.name); // используем path.join для формирования полного пути
             }
+
             const dbFile = new File({
                 name: file.name,
                 type,
                 size: file.size,
-                path: filePath,
+                path: dbFilePath,
                 parent: parent ? parent._id : null,
                 user: user._id,
             });
