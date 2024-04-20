@@ -1,12 +1,10 @@
-function filePath(path) {
+const path = require('path');
+
+function filePath(filePath) {
     return function(req, res, next) {
-        req.filePath = path
+        req.filePath = path.resolve(filePath);
         next();
-    
-    }
+    };
 }
 
-
-
-
-module.exports = filePath
+module.exports = filePath;
